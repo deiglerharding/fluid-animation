@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { 
+            margin: 0;
+            background: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            background: black;
+            border: 2px solid rgba(0, 100, 255, 0.3);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="waterCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('waterCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 800;
+        canvas.height = 400;
+
+        class WaveLine {
+            constructor(y, depth) {
+                this.segments = 80;
+                this.points = [];
+                this.velocities = [];
+                this.depth = depth;
+                this.baseY = y;
+                this.maxVelocity = 5; // Maximum velocity cap
+                
+                for (let i = 0; i < this.segments; i++) {
+                    this.points.push({
+                        x: (canvas.width * i) / (this.segments - 1),
+                        y: y + Math.sin(i * 0.2) * 5
+                    });
+                    this.velocities.push({
+                        x: 0,
+                        y: 0
+                    });
+                }
+
+                this.dampening = 0.99;
+                this.tension = 0.015;
+                this.boundary = {
+                    top: 50,
+                    bottom: canvas.height - 50
+                };
+            }
+
+            capVelocity(velocity) {
+                const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+                if (speed > this.maxVelocity) {
+                    const scale = this.maxVelocity / speed;
+                    velocity.x *= scale;
+                    velocity.y *= scale;
+                }
+            }
+
+            update() {
+                const time = Date.now() * 0.001;
+                
+                for (let i = 0; i < this.points.length; i++) {
+                    let point = this.points[i];
+                    let velocity = this.velocities[i];
+
+                    // Base wave motion
+                    let baseWave = Math.sin(time * 0.8 + i * 0.2) * 0.05;
+                    let secondaryWave = Math.cos(time * 1.2 + i * 0.3) * 0.03;
+                    velocity.y += baseWave + secondaryWave;
+
+                    // Stabilizing force towards base position
+                    let distanceFromBase = this.baseY - point.y;
+                    velocity.y += distanceFromBase * 0.002;
+
+                    // Spring forces between points
+                    if (i > 0) {
+                        let prevPoint = this.points[i - 1];
+                        let dx = prevPoint.x - point.x;
+                        let dy = prevPoint.y - point.y;
+                        let distance = Math.sqrt(dx * dx + dy * dy);
+                        let force = (distance - 10) * this.tension;
+                        velocity.x += (dx / distance) * force;
+                        velocity.y += (dy / distance) * force;
+                    }
+                    if (i < this.points.length - 1) {
+                        let nextPoint = this.points[i + 1];
+                        let dx = nextPoint.x - point.x;
+                        let dy = nextPoint.y - point.y;
+                        let distance = Math.sqrt(dx * dx + dy * dy);
+                        let force = (distance - 10) * this.tension;
+                        velocity.x += (dx / distance) * force;
+                        velocity.y += (dy / distance) * force;
+                    }
+
+                    // Boundary forces
+                    if (point.y < this.boundary.top) {
+                        velocity.y += (this.boundary.top - point.y) * 0.05;
+                    }
+                    if (point.y > this.boundary.bottom) {
+                        velocity.y += (this.boundary.bottom - point.y) * 0.05;
+                    }
+
+                    // Container walls
+                    if (point.x < 50) {
+                        velocity.x += (50 - point.x) * 0.05;
+                    }
+                    if (point.x > canvas.width - 50) {
+                        velocity.x += (canvas.width - 50 - point.x) * 0.05;
+                    }
+
+                    // Cap velocity before applying
+                    this.capVelocity(velocity);
+
+                    // Update position
+                    point.x += velocity.x;
+                    point.y += velocity.y;
+
+                    // Apply dampening
+                    velocity.x *= this.dampening;
+                    velocity.y *= this.dampening;
+
+                    // Minimal random motion
+                    velocity.y += (Math.random() - 0.5) * 0.05;
+                }
+            }
+
+            draw() {
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                const alpha = 0.8 - this.depth * 0.1;
+                gradient.addColorStop(0, `rgba(100, 200, 255, ${alpha})`);
+                gradient.addColorStop(0.5, `rgba(50, 150, 255, ${alpha * 0.8})`);
+                gradient.addColorStop(1, `rgba(0, 100, 255, ${alpha * 0.6})`);
+
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+
+                for (let i = 0; i < this.points.length - 1; i++) {
+                    const xc = (this.points[i].x + this.points[i + 1].x) / 2;
+                    const yc = (this.points[i].y + this.points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+                }
+
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2 + (1 - this.depth) * 2;
+                ctx.stroke();
+            }
+
+            applyForce(x, y, strength) {
+                for (let i = 0; i < this.points.length; i++) {
+                    let point = this.points[i];
+                    let dx = x - point.x;
+                    let dy = y - point.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 150) {
+                        let force = (1 - distance / 150) * strength * 0.015;
+                        this.velocities[i].x += dx * force;
+                        this.velocities[i].y += dy * force;
+                        this.capVelocity(this.velocities[i]);
+                    }
+                }
+            }
+        }
+
+        // Rest of the code remains the same...
+        class WaterAnimation {
+            constructor() {
+                this.lines = [];
+                this.particles = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 12; i++) {
+                    this.lines.push(new WaveLine(
+                        canvas.height * (0.3 + i * 0.06),
+                        i / 12
+                    ));
+                }
+
+                for (let i = 0; i < 50; i++) {
+                    this.particles.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        vx: 0,
+                        vy: 0,
+                        size: Math.random() * 3 + 1,
+                        life: 0
+                    });
+                }
+            }
+
+            update() {
+                this.lines.forEach(line => line.update());
+                
+                this.particles.forEach(particle => {
+                    if (particle.life > 0) {
+                        particle.x += particle.vx;
+                        particle.y += particle.vy;
+                        particle.vy += 0.2;
+                        particle.life--;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                bgGradient.addColorStop(0, 'rgba(0, 20, 40, 1)');
+                bgGradient.addColorStop(1, 'rgba(0, 10, 30, 1)');
+                ctx.fillStyle = bgGradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                this.lines.forEach(line => line.draw());
+
+                this.particles.forEach(particle => {
+                    if (particle.life > 0) {
+                        ctx.beginPath();
+                        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(150, 220, 255, ${particle.life / 30})`;
+                        ctx.fill();
+                    }
+                });
+
+                this.drawShimmer();
+            }
+
+            drawShimmer() {
+                const time = Date.now() * 0.001;
+                for (let i = 0; i < 150; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const size = Math.random() * 2;
+                    const alpha = Math.random() * 0.3 * (1 + Math.sin(time + i) * 0.5);
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200, 240, 255, ${alpha})`;
+                    ctx.fill();
+                }
+            }
+
+            createSplash(x, y, strength) {
+                for (let i = 0; i < strength * 5; i++) {
+                    let angle = Math.random() * Math.PI * 2;
+                    let speed = Math.random() * strength * 2;
+                    let particle = this.particles.find(p => p.life <= 0);
+                    
+                    if (particle) {
+                        particle.x = x;
+                        particle.y = y;
+                        particle.vx = Math.cos(angle) * speed;
+                        particle.vy = Math.sin(angle) * speed - 2;
+                        particle.life = 30 + Math.random() * 20;
+                    }
+                }
+            }
+        }
+
+        const waterAnim = new WaterAnimation();
+
+        function animate() {
+            waterAnim.update();
+            waterAnim.draw();
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            waterAnim.lines.forEach(line => {
+                line.applyForce(x, y, 1);
+            });
+        });
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            waterAnim.lines.forEach(line => {
+                line.applyForce(x, y, 8);
+            });
+            waterAnim.createSplash(x, y, 5);
+        });
+    </script>
+</body>
+</html>

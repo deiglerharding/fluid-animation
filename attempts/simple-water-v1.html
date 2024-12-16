@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { 
+            margin: 0;
+            background: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            background: black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="waterCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('waterCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 800;
+        canvas.height = 400;
+
+        class WaveLine {
+            constructor(y) {
+                this.segments = 50;
+                this.points = [];
+                this.velocities = [];
+                
+                // Initialize points along the line
+                for (let i = 0; i < this.segments; i++) {
+                    this.points.push({
+                        x: (canvas.width * i) / (this.segments - 1),
+                        y: y + Math.random() * 20 - 10
+                    });
+                    this.velocities.push({
+                        x: 0,
+                        y: 0
+                    });
+                }
+
+                this.tension = 0.99;    // Spring tension
+                this.dampening = 0.98;   // Velocity dampening
+                this.boundary = {
+                    top: 50,
+                    bottom: canvas.height - 50
+                };
+            }
+
+            update() {
+                for (let i = 0; i < this.points.length; i++) {
+                    let point = this.points[i];
+                    let velocity = this.velocities[i];
+
+                    // Add some continuous motion
+                    velocity.y += Math.sin(Date.now() * 0.002 + i * 0.3) * 0.1;
+
+                    // Apply spring forces between points
+                    if (i > 0) {
+                        let prevPoint = this.points[i - 1];
+                        let dx = prevPoint.x - point.x;
+                        let dy = prevPoint.y - point.y;
+                        velocity.x += dx * 0.1;
+                        velocity.y += dy * 0.1;
+                    }
+                    if (i < this.points.length - 1) {
+                        let nextPoint = this.points[i + 1];
+                        let dx = nextPoint.x - point.x;
+                        let dy = nextPoint.y - point.y;
+                        velocity.x += dx * 0.1;
+                        velocity.y += dy * 0.1;
+                    }
+
+                    // Apply boundary forces
+                    if (point.y < this.boundary.top) {
+                        velocity.y += (this.boundary.top - point.y) * 0.5;
+                    }
+                    if (point.y > this.boundary.bottom) {
+                        velocity.y += (this.boundary.bottom - point.y) * 0.5;
+                    }
+
+                    // Update position
+                    point.x += velocity.x;
+                    point.y += velocity.y;
+
+                    // Apply dampening
+                    velocity.x *= this.dampening;
+                    velocity.y *= this.dampening;
+
+                    // Keep points within horizontal bounds
+                    point.x = Math.max(0, Math.min(canvas.width, point.x));
+                }
+            }
+
+            draw() {
+                // Create gradient
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, 'rgba(255, 255, 220, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.4)');
+                gradient.addColorStop(1, 'rgba(184, 134, 11, 0.2)');
+
+                // Draw the curve
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+
+                // Create smooth curve through points
+                for (let i = 1; i < this.points.length - 2; i++) {
+                    const xc = (this.points[i].x + this.points[i + 1].x) / 2;
+                    const yc = (this.points[i].y + this.points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+                }
+
+                ctx.quadraticCurveTo(
+                    this.points[this.points.length - 2].x,
+                    this.points[this.points.length - 2].y,
+                    this.points[this.points.length - 1].x,
+                    this.points[this.points.length - 1].y
+                );
+
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            applyForce(x, y, strength) {
+                for (let i = 0; i < this.points.length; i++) {
+                    let point = this.points[i];
+                    let dx = x - point.x;
+                    let dy = y - point.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 100) {
+                        let force = (1 - distance / 100) * strength;
+                        this.velocities[i].y += dy * force * 0.1;
+                    }
+                }
+            }
+        }
+
+        class WaterAnimation {
+            constructor() {
+                this.lines = [];
+                this.init();
+            }
+
+            init() {
+                // Create multiple wave lines
+                for (let i = 0; i < 8; i++) {
+                    this.lines.push(new WaveLine(canvas.height * (0.3 + i * 0.1)));
+                }
+            }
+
+            update() {
+                this.lines.forEach(line => line.update());
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw background gradient
+                const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                bgGradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+                bgGradient.addColorStop(1, 'rgba(184, 134, 11, 0.1)');
+                ctx.fillStyle = bgGradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw lines
+                this.lines.forEach(line => line.draw());
+
+                // Add shimmer
+                this.drawShimmer();
+            }
+
+            drawShimmer() {
+                for (let i = 0; i < 100; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const size = Math.random() * 1.5;
+                    const alpha = Math.random() * 0.3;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 220, ${alpha})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        const waterAnim = new WaterAnimation();
+
+        function animate() {
+            waterAnim.update();
+            waterAnim.draw();
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // Add mouse interaction
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            waterAnim.lines.forEach(line => {
+                line.applyForce(x, y, 1);
+            });
+        });
+
+        // Add click interaction for bigger forces
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            waterAnim.lines.forEach(line => {
+                line.applyForce(x, y, 5);
+            });
+        });
+    </script>
+</body>
+</html>
