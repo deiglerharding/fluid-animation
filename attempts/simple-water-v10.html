@@ -382,71 +382,63 @@
 
             // Rendering method
          
-
             draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+                
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bgGradient.addColorStop(0, 'rgba(0, 20, 40, 1)');
+        bgGradient.addColorStop(1, 'rgba(0, 10, 30, 1)');
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         const isoTransform = (x, y, z) => {
             const scale = Math.min(canvas.width, canvas.height) / (this.gridSize * 0.5);
             const offsetX = canvas.width / 2;
             const offsetY = canvas.height * 0.65;
             
-            const wobbleX = Math.sin(Date.now() / 1000) * 0.02;
-            const wobbleY = Math.cos(Date.now() / 1000) * 0.02;
-            
-            const isoX = (x - z) * Math.cos(Math.PI / 6 + wobbleX) * scale + offsetX;
-            const isoY = ((x + z) * Math.sin(Math.PI / 1.04 + wobbleY) - y * 2) * scale + offsetY;
+            const isoX = (x - z) * Math.cos(Math.PI / 6) * scale + offsetX;
+            const isoY = ((x + z) * Math.sin(Math.PI / 1.04) - y * 2) * scale + offsetY;
             
             return { x: isoX, y: isoY };
-        };
-
-        // Store all lines to render
-        const lines = [];
-
-        // Create grid lines
-        for (let z = 0; z < this.gridSize; z++) {
-            for (let x = 0; x < this.gridSize; x++) {
-                const p1 = this.points[z * this.gridSize + x];
-                
-                // Add horizontal line
-                if (x < this.gridSize - 1) {
-                    const p2 = this.points[z * this.gridSize + (x + 1)];
-                    const pos1 = isoTransform(p1.x, p1.y, p1.z);
-                    const pos2 = isoTransform(p2.x, p2.y, p2.z);
-                    lines.push({
-                        start: pos1,
-                        end: pos2,
-                        z: (p1.z + p2.z) / 2
-                    });
-                }
-                
-                // Add vertical line
-                if (z < this.gridSize - 1) {
-                    const p2 = this.points[(z + 1) * this.gridSize + x];
-                    const pos1 = isoTransform(p1.x, p1.y, p1.z);
-                    const pos2 = isoTransform(p2.x, p2.y, p2.z);
-                    lines.push({
-                        start: pos1,
-                        end: pos2,
-                        z: (p1.z + p2.z) / 2
-                    });
-                }
-            }
         }
 
-        // Sort lines back to front
-        lines.sort((a, b) => b.z - a.z);
-
-        // Render lines
-        lines.forEach(line => {
+        // Draw horizontal lines
+        for (let z = 0; z < this.gridSize; z++) {
             ctx.beginPath();
-            ctx.moveTo(line.start.x, line.start.y);
-            ctx.lineTo(line.end.x, line.end.y);
-            ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
-            ctx.lineWidth = 0.5;
+            for (let x = 0; x < this.gridSize; x++) {
+                const point = this.points[z * this.gridSize + x];
+                const pos = isoTransform(point.x, point.y, point.z);
+                
+                if (x === 0) {
+                    ctx.moveTo(pos.x, pos.y);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            }
+            ctx.strokeStyle = `rgba(100, 200, 255, ${0.1 + z * 0.02})`;
+            ctx.lineWidth = 1;
             ctx.stroke();
-        });
+        }
+
+        // Draw vertical lines
+        for (let x = 0; x < this.gridSize; x++) {
+            ctx.beginPath();
+            for (let z = 0; z < this.gridSize; z++) {
+                const point = this.points[z * this.gridSize + x];
+                const pos = isoTransform(point.x, point.y, point.z);
+                
+                if (z === 0) {
+                    ctx.moveTo(pos.x, pos.y);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            }
+            ctx.strokeStyle = `rgba(100, 200, 255, ${0.1 + x * 0.02})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     }
+
 
         }
 
