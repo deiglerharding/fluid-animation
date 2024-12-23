@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { 
+            margin: 0;
+            background: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            background: black;
+            border: 2px solid rgba(0, 100, 255, 0.3);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="waterCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('waterCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 800;
+        canvas.height = 400;
+
+        class WaterPoint {
+            constructor(x, z) {
+        this.x = x + (Math.random() - 0.5) * 0.2; // Reduced offset
+        this.z = z + (Math.random() - 0.5) * 0.2;
+        this.y = 0;
+        this.targetY = 0;
+        this.velocity = 0;
+        this.acceleration = 0;
+        this.damping = 0.02 + Math.random() * 0.01;
+        this.tension = 0.01 + Math.random() * 0.005; // Adjusted tension
+        this.phase = Math.random() * Math.PI * 2;
+        this.frequency = 0.6 + Math.random() * 0.3; // Adjusted frequency
+    }
+
+            update(neighbors, speedMultiplier) {
+                // Calculate force from neighboring points
+                let neighborForce = 0;
+                if (neighbors.length > 0) {
+                    const avgNeighborHeight = neighbors.reduce((sum, n) => sum + n.y, 0) / neighbors.length;
+                    neighborForce = (avgNeighborHeight - this.y) * this.tension;
+                }
+
+                // Add random turbulence for more chaotic motion
+                const turbulence = (Math.random() - 0.5) * 0.002;
+                
+                // Calculate spring force towards target height
+                const springForce = (this.targetY - this.y) * 0.005;
+                
+                // Update physics
+                this.acceleration = neighborForce + springForce + turbulence;
+                this.acceleration -= this.velocity * this.damping;
+                this.velocity += this.acceleration * speedMultiplier;
+                this.y += this.velocity * speedMultiplier;
+                this.acceleration = 0;
+            }
+        }
+        class CollisionEffect {
+            constructor(x, z, intensity) {
+                // Position of the collision effect with random offset
+                this.x = x + (Math.random() - 0.5) * 10; // Random x offset
+                this.z = z + (Math.random() - 0.5) * 10; // Random z offset
+                
+                // Intensity of the effect with random variation
+                this.intensity = intensity * (0.3 + Math.random() * 0.4);
+                
+                // Lifecycle properties
+                this.age = 0;  // Current age of the effect
+                this.maxAge = 35 + Math.random() * 20;  // Random lifetime
+                
+                // Effect range
+                this.radius = 10 + Math.random() * 10;  // Random initial radius
+                
+                // Optional: Additional properties for more complex effects
+                this.waveFrequency = 0.15 + Math.random() * 0.1;  // Controls ripple spacing
+                this.decayRate = 0.93 + Math.random() * 0.04;     // Controls how fast effect fades
+                this.expansionRate = 0.6 + Math.random() * 0.4;   // Controls how fast radius grows
+            }
+
+            // Check if the effect should continue existing
+            isAlive() {
+                return this.age < this.maxAge;
+            }
+
+            // Update the effect's properties
+            update(speedMultiplier) {
+                // Increase age
+                this.age += speedMultiplier;
+                
+                // Expand radius over time
+                this.radius += this.expansionRate * speedMultiplier;
+                
+                // Decrease intensity with random variation
+                this.intensity *= this.decayRate;
+                
+                // Optional: Add some randomness to the decay
+                if (Math.random() < 0.1) {  // 10% chance each update
+                    this.intensity *= 0.95;  // Additional random decay
+                }
+            }
+
+            // Calculate effect at a specific point
+            getEffectAt(pointX, pointZ) {
+                const dx = pointX - this.x;
+                const dz = pointZ - this.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < this.radius) {
+                    // Gaussian falloff for smooth ripple effect
+                    const falloff = Math.exp(-(distance * distance) / 
+                        (2 * this.radius * this.radius));
+                    
+                    // Ripple wave calculation
+                    const ripple = Math.sin(distance - this.age * this.waveFrequency);
+                    
+                    // Combine falloff and ripple with intensity
+                    return this.intensity * falloff * ripple * 0.015;
+                }
+                
+                return 0;  // No effect beyond radius
+            }
+        }
+
+        class Force {
+            constructor() {
+                // Initial position - random within canvas
+                this.x = Math.random() * canvas.width;
+                this.z = Math.random() * canvas.height;
+
+                // Initial velocity - random direction
+                this.vx = (Math.random() - 0.5) * 4;  // Random x velocity
+                this.vz = (Math.random() - 0.5) * 4;  // Random z velocity
+
+                // Force properties
+                this.radius = 40 + Math.random() * 40;         // Random influence radius
+                this.strength = 0.003 + Math.random() * 0.002; // Random force strength
+                
+                // Speed constraints
+                this.maxSpeed = 2 + Math.random() * 2;  // Maximum speed with random variation
+                this.minSpeed = 0.5 + Math.random() * 1; // Minimum speed with random variation
+
+                // Additional properties for movement patterns
+                this.phase = Math.random() * Math.PI * 2;      // Random starting phase
+                this.chaosFactor = Math.random() * 0.2;        // Random chaos in movement
+                this.lastCollisionTime = 0;                    // Collision cooldown tracker
+                
+                // Optional: movement pattern variables
+                this.wobbleFrequency = 0.01 + Math.random() * 0.02;
+                this.wobbleAmplitude = 0.2 + Math.random() * 0.3;
+            }
+
+            update(speedMultiplier) {
+                // Update phase for periodic motion
+                this.phase += this.wobbleFrequency * speedMultiplier;
+                
+                // Add random direction changes (chaos)
+                this.vx += (Math.random() - 0.5) * this.chaosFactor;
+                this.vz += (Math.random() - 0.5) * this.chaosFactor;
+                
+                // Optional: Add wobble to movement
+                this.vx += Math.sin(this.phase) * this.wobbleAmplitude * 0.1;
+                this.vz += Math.cos(this.phase) * this.wobbleAmplitude * 0.1;
+                
+                // Normalize velocity to maintain reasonable speed
+                const speed = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+                if (speed > this.maxSpeed) {
+                    this.vx = (this.vx / speed) * this.maxSpeed;
+                    this.vz = (this.vz / speed) * this.maxSpeed;
+                } else if (speed < this.minSpeed) {
+                    const factor = this.minSpeed / speed;
+                    this.vx *= factor;
+                    this.vz *= factor;
+                }
+
+                // Update position
+                this.x += this.vx * speedMultiplier;
+                this.z += this.vz * speedMultiplier;
+
+                // Bounce off canvas boundaries with random angle variation
+                if (this.x < this.radius || this.x > canvas.width - this.radius) {
+                    this.vx *= -1;
+                    this.vx += (Math.random() - 0.5) * 0.5; // Add random bounce variation
+                }
+                if (this.z < this.radius || this.z > canvas.height - this.radius) {
+                    this.vz *= -1;
+                    this.vz += (Math.random() - 0.5) * 0.5; // Add random bounce variation
+                }
+            }
+
+            checkCollision(other) {
+                // Calculate distance between forces
+                const dx = this.x - other.x;
+                const dz = this.z - other.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                const now = Date.now();
+
+                // Check for collision with cooldown
+                if (distance < this.radius && 
+                    now - this.lastCollisionTime > 500 && 
+                    now - other.lastCollisionTime > 500) {
+                    
+                    // Calculate collision angle with random variation
+                    const angle = Math.atan2(dz, dx) + (Math.random() - 0.5) * 0.2;
+                    const sin = Math.sin(angle);
+                    const cos = Math.cos(angle);
+
+                    // Calculate new velocities
+                    const vx1 = this.vx * cos + this.vz * sin;
+                    const vz1 = -this.vx * sin + this.vz * cos;
+                    const vx2 = other.vx * cos + other.vz * sin;
+                    const vz2 = -other.vx * sin + other.vz * cos;
+
+                    // Apply new velocities with random variation
+                    this.vx = vx2 * cos - vz1 * sin;
+                    this.vz = vx2 * sin + vz1 * cos;
+                    other.vx = vx1 * cos - vz2 * sin;
+                    other.vz = vx1 * sin + vz2 * cos;
+
+                    // Update collision timestamps
+                    this.lastCollisionTime = now;
+                    other.lastCollisionTime = now;
+
+                    // Return collision data for effect creation
+                    return {
+                        x: (this.x + other.x) / 2,        // Collision midpoint
+                        z: (this.z + other.z) / 2,
+                        intensity: Math.sqrt(dx * dx + dz * dz) * 0.006 // Collision intensity
+                    };
+                }
+                return null; // No collision
+            }
+
+            // Calculate force effect at a point
+            getForceAt(pointX, pointZ) {
+                const dx = pointX - this.x;
+                const dz = pointZ - this.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < this.radius) {
+                    return this.strength * (1 - distance / this.radius);
+                }
+                return 0;
+            }
+        }
+        class WaterSimulation {
+            constructor() {
+                // Grid configuration
+                this.gridSize = 80;
+                this.points = [];
+                
+                // Create moving forces
+                this.forces = Array(10).fill(null).map(() => new Force());
+                
+                // Collision effects array
+                this.collisionEffects = [];
+                
+                // Animation speed control
+                this.speedMultiplier = 1.0;
+                
+                // Initialize water points grid
+                for (let z = 0; z < this.gridSize; z++) {
+                    for (let x = 0; x < this.gridSize; x++) {
+                        this.points.push(new WaterPoint(x, z));
+                    }
+                }
+            }
+
+            // Speed control method
+            setSpeed(speed) {
+                this.speedMultiplier = speed;
+            }
+
+            // Find neighboring points for wave propagation
+            getNeighbors(point) {
+                const neighbors = [];
+                const idx = this.points.indexOf(point);
+                const x = idx % this.gridSize;
+                const z = Math.floor(idx / this.gridSize);
+
+                // Define 8-directional neighbors
+                const directions = [
+                    [-1, -1], [0, -1], [1, -1],
+                    [-1, 0],           [1, 0],
+                    [-1, 1],  [0, 1],  [1, 1]
+                ];
+
+                // Find valid neighbors
+                for (const [dx, dz] of directions) {
+                    const newX = x + dx;
+                    const newZ = z + dz;
+                    if (newX >= 0 && newX < this.gridSize && 
+                        newZ >= 0 && newZ < this.gridSize) {
+                        neighbors.push(this.points[newZ * this.gridSize + newX]);
+                    }
+                }
+
+                return neighbors;
+            }
+
+            // Main update method
+            update() {
+                const time = (Date.now() / 1000) * this.speedMultiplier;
+                
+                // Update base wave motion
+                this.points.forEach((point, index) => {
+                    point.targetY = 
+                        Math.sin(point.x / 4 + time * point.frequency + point.phase) * 0.1 +
+                        Math.cos(point.z / 3 + time * 0.8 * point.frequency) * 0.08 +
+                        Math.sin((point.x + point.z) / 5 + time * 1.2) * 0.05;
+                });
+
+                // Update forces
+                this.forces.forEach(force => force.update(this.speedMultiplier));
+
+                // Check for force collisions
+                for (let i = 0; i < this.forces.length; i++) {
+                    for (let j = i + 1; j < this.forces.length; j++) {
+                        const collision = this.forces[i].checkCollision(this.forces[j]);
+                        if (collision) {
+                            this.collisionEffects.push(
+                                new CollisionEffect(collision.x, collision.z, collision.intensity)
+                            );
+                        }
+                    }
+                }
+
+                // Update collision effects
+                this.collisionEffects = this.collisionEffects.filter(effect => effect.isAlive());
+                this.collisionEffects.forEach(effect => effect.update(this.speedMultiplier));
+
+                // Apply force effects to points
+                this.forces.forEach(force => {
+                    const gridX = (force.x / canvas.width) * this.gridSize;
+                    const gridZ = (force.z / canvas.height) * this.gridSize;
+
+                    this.points.forEach(point => {
+                        const dx = point.x - gridX;
+                        const dz = point.z - gridZ;
+                        const distance = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (distance < force.radius / 10) {
+                            point.velocity += force.strength * 
+                                (1 - distance / (force.radius / 10)) * 
+                                this.speedMultiplier;
+                        }
+                    });
+                });
+
+                // Apply collision effects to points
+                this.collisionEffects.forEach(effect => {
+                    const gridX = (effect.x / canvas.width) * this.gridSize;
+                    const gridZ = (effect.z / canvas.height) * this.gridSize;
+
+                    this.points.forEach(point => {
+                        const dx = point.x - gridX;
+                        const dz = point.z - gridZ;
+                        const distance = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (distance < effect.radius) {
+                            const falloff = Math.exp(-(distance * distance) / 
+                                (2 * effect.radius * effect.radius));
+                            const rippleIntensity = effect.intensity * falloff * 
+                                Math.sin(distance - effect.age * 0.15) * 0.015;
+                            point.velocity += rippleIntensity * this.speedMultiplier;
+                        }
+                    });
+                });
+
+                // Update all points with neighbor interactions
+                this.points.forEach(point => {
+                    const neighbors = this.getNeighbors(point);
+                    point.update(neighbors, this.speedMultiplier);
+                });
+            }
+
+            // Rendering method
+         
+
+            draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const isoTransform = (x, y, z) => {
+            const scale = Math.min(canvas.width, canvas.height) / (this.gridSize * 0.5);
+            const offsetX = canvas.width / 2;
+            const offsetY = canvas.height * 0.65;
+            
+            const wobbleX = Math.sin(Date.now() / 1000) * 0.02;
+            const wobbleY = Math.cos(Date.now() / 1000) * 0.02;
+            
+            const isoX = (x - z) * Math.cos(Math.PI / 6 + wobbleX) * scale + offsetX;
+            const isoY = ((x + z) * Math.sin(Math.PI / 1.04 + wobbleY) - y * 2) * scale + offsetY;
+            
+            return { x: isoX, y: isoY };
+        };
+
+        // Store all lines to render
+        const lines = [];
+
+        // Create grid lines
+        for (let z = 0; z < this.gridSize; z++) {
+            for (let x = 0; x < this.gridSize; x++) {
+                const p1 = this.points[z * this.gridSize + x];
+                
+                // Add horizontal line
+                if (x < this.gridSize - 1) {
+                    const p2 = this.points[z * this.gridSize + (x + 1)];
+                    const pos1 = isoTransform(p1.x, p1.y, p1.z);
+                    const pos2 = isoTransform(p2.x, p2.y, p2.z);
+                    lines.push({
+                        start: pos1,
+                        end: pos2,
+                        z: (p1.z + p2.z) / 2
+                    });
+                }
+                
+                // Add vertical line
+                if (z < this.gridSize - 1) {
+                    const p2 = this.points[(z + 1) * this.gridSize + x];
+                    const pos1 = isoTransform(p1.x, p1.y, p1.z);
+                    const pos2 = isoTransform(p2.x, p2.y, p2.z);
+                    lines.push({
+                        start: pos1,
+                        end: pos2,
+                        z: (p1.z + p2.z) / 2
+                    });
+                }
+            }
+        }
+
+        // Sort lines back to front
+        lines.sort((a, b) => b.z - a.z);
+
+        // Render lines
+        lines.forEach(line => {
+            ctx.beginPath();
+            ctx.moveTo(line.start.x, line.start.y);
+            ctx.lineTo(line.end.x, line.end.y);
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        });
+    }
+
+        }
+
+        // Create simulation instance
+const waterSim = new WaterSimulation();
+
+// Animation loop function
+function animate() {
+    // Add random speed variation
+    const speedVariation = 1 + (Math.random() - 0.5) * 0.2;
+    waterSim.setSpeed(2.0 * speedVariation);
+    
+    // Update and draw each frame
+    waterSim.update();
+    waterSim.draw();
+    requestAnimationFrame(animate);
+}
+
+// Optional: Add mouse interaction
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Add effects only occasionally for smoother interaction
+    if (Math.random() < 0.1) { // 10% chance each frame
+        waterSim.collisionEffects.push(
+            new CollisionEffect(
+                x,
+                y,
+                0.5 + Math.random() * 0.5
+            )
+        );
+    }
+});
+
+// Optional: Add touch interaction for mobile
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    
+    if (Math.random() < 0.1) {
+        waterSim.collisionEffects.push(
+            new CollisionEffect(
+                x,
+                y,
+                0.5 + Math.random() * 0.5
+            )
+        );
+    }
+}, { passive: false });
+
+// Start the animation
+animate();
+    </script>
+</body>
+</html>
